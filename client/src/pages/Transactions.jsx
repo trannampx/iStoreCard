@@ -1,7 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Html5Qrcode, Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import api from '../api';
+
+// Phát hiện đang chạy trong Capacitor APK
+const isCapacitor = () => typeof window !== 'undefined' && window.Capacitor !== undefined;
 
 function Transactions() {
   const { id } = useParams();
@@ -169,9 +173,47 @@ function Transactions() {
     }
   };
 
-  // Mở trình quét QR (Dùng Camera thiết bị)
-  const startQRScanner = () => {
-    setIsLiveScannerOpen(true);
+  // Mở camera quét QR — dùng Capacitor Camera trên APK, Html5QrcodeScanner trên web
+  const startQRScanner = async () => {
+    if (isCapacitor()) {
+      // ── Chế độ APK: dùng Capacitor Camera native ──────────────────
+      setScanning(true);
+      try {
+        const photo = await Camera.getPhoto({
+          quality: 90,
+          allowEditing: false,
+          resultType: CameraResultType.DataUrl,
+          source: CameraSource.Camera,
+          promptLabelHeader: 'Quét mã QR',
+          promptLabelCancel: 'Hủy',
+        });
+
+        if (!photo.dataUrl) { setScanning(false); return; }
+
+        // Chuyển dataUrl → Blob → File rồi đưa vào Html5Qrcode decode
+        const res = await fetch(photo.dataUrl);
+        const blob = await res.blob();
+        const file = new File([blob], 'qr-capture.jpg', { type: 'image/jpeg' });
+
+        const html5QrCode = new Html5Qrcode('qr-reader-hidden');
+        try {
+          const decoded = await html5QrCode.scanFile(file, false);
+          handleQRScanSuccess(decoded);
+        } catch (_) {
+          alert('Không nhận diện được mã QR. Vui lòng chụp rõ và gần hơn!');
+        } finally {
+          try { await html5QrCode.clear(); } catch (_) {}
+          setScanning(false);
+        }
+      } catch (err) {
+        setScanning(false);
+        if (err && err.message && err.message.toLowerCase().includes('cancel')) return;
+        alert('Không thể mở camera. Vui lòng cấp quyền Camera trong Cài đặt > iStoreCard > Quyền.');
+      }
+    } else {
+      // ── Chế độ Web browser: dùng live scanner Html5QrcodeScanner ──
+      setIsLiveScannerOpen(true);
+    }
   };
 
   const handleQRImageUpload = async (e) => {
@@ -224,51 +266,45 @@ function Transactions() {
     compressAndScan();
   };
 
-  // Khởi động live scanner khi modal mở
+  // Live scanner chỉ dùng trên Web browser (không dùng trong APK)
   useEffect(() => {
     if (!isLiveScannerOpen) return;
 
     setScanning(true);
-    let scannerInstance = null;
 
     const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
       const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-      const size = Math.floor(minEdge * 0.7);
-      return { width: size, height: size };
+      return { width: Math.floor(minEdge * 0.7), height: Math.floor(minEdge * 0.7) };
     };
 
-    // Dùng setTimeout nhỏ để đảm bảo DOM đã render div#qr-reader-live
     const timerId = setTimeout(() => {
       try {
-        scannerInstance = new Html5QrcodeScanner(
+        const { Html5QrcodeScanner } = require('html5-qrcode');
+        const scannerInstance = new Html5QrcodeScanner(
           "qr-reader-live",
           { fps: 10, qrbox: qrboxFunction, aspectRatio: 1.0, rememberLastUsedCamera: true },
           false
         );
         qrScannerRef.current = scannerInstance;
-
         scannerInstance.render(
           (decodedText) => {
-            // Quét thành công
             scannerInstance.clear().catch(() => {});
             qrScannerRef.current = null;
             setIsLiveScannerOpen(false);
             setScanning(false);
             handleQRScanSuccess(decodedText);
           },
-          () => { /* bỏ qua lỗi từng frame */ }
+          () => {}
         );
       } catch (err) {
-        console.error('Lỗi khởi tạo scanner:', err);
+        console.error('Lỗi live scanner:', err);
         setScanning(false);
         setIsLiveScannerOpen(false);
-        alert('Không thể mở camera. Vui lòng cấp quyền Camera cho ứng dụng trong Cài đặt.');
       }
     }, 100);
 
     return () => {
       clearTimeout(timerId);
-      // Cleanup khi component unmount hoặc modal đóng
       if (qrScannerRef.current) {
         qrScannerRef.current.clear().catch(() => {});
         qrScannerRef.current = null;

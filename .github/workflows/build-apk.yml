@@ -98,7 +98,12 @@ jobs:
         working-directory: client/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tail -100
+          echo "=== Kiem tra cau truc project ==="
+          ls -la app/src/main/java/com/istorecard/app/ || ls -la app/src/main/java/io/ionic/starter/ || find app/src/main/java -name "*.java" | head -20
+          echo "=== AndroidManifest ==="
+          cat app/src/main/AndroidManifest.xml
+          echo "=== Build ==="
+          ./gradlew assembleDebug --no-daemon --info 2>&1 | grep -E "error:|Error|FAILED|warning:|Exception|BUILD" | tail -50
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

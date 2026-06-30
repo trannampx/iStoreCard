@@ -7,7 +7,14 @@ import appLogo from '../img/logo.png';
 
 // Phát hiện đang chạy trong APK (Capacitor) hay web browser
 const isCapacitorApp = () => {
-  return window.Capacitor !== undefined || window.location.protocol === 'capacitor:';
+  // Capacitor inject object này vào window khi chạy trong WebView
+  return typeof window !== 'undefined' && (
+    window.Capacitor !== undefined ||
+    window.location.protocol === 'capacitor:' ||
+    // Khi androidScheme = "https", Capacitor vẫn inject window.Capacitor
+    // nhưng protocol thành https — kiểm tra thêm userAgent để chắc chắn
+    (window.location.protocol === 'https:' && window.location.hostname === 'localhost')
+  );
 };
 
 // Lấy IP:Port hiện tại từ serverUrl đã lưu

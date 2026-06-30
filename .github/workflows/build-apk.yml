@@ -91,12 +91,14 @@ jobs:
         working-directory: client/android
         run: |
           chmod +x gradlew
-          echo "=== Java version ==="
-          java -version
-          echo "=== Project structure ==="
-          find app/src/main/java -name "*.java" | head -10
-          echo "=== Build ==="
           ./gradlew assembleDebug --no-daemon
+
+      - name: Verify APK exists
+        working-directory: client/android
+        run: |
+          echo "=== Tim file APK ==="
+          find . -name "*.apk" 2>/dev/null
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -106,6 +108,4 @@ jobs:
           retention-days: 30
 
       - name: Build summary
-        run: |
-          echo "APK build thanh cong!"
-          ls -lh client/android/app/build/outputs/apk/debug/ || echo "APK da duoc upload thanh cong o buoc truoc"
+        run: echo "APK build thanh cong!"

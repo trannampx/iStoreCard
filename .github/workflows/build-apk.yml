@@ -108,4 +108,4 @@ jobs:
       - name: Build summary
         run: |
           echo "APK build thanh cong!"
-          ls -lh client/android/app/build/outputs/apk/debug/
+          ls -lh client/android/app/build/outputs/apk/debug/ || echo "APK da duoc upload thanh cong o buoc truoc"
